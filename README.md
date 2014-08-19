@@ -1,5 +1,9 @@
 # GitLab fork | OmniAuth LDAP [![build status](https://secure.travis-ci.org/gitlabhq/omniauth-ldap.png)](https://travis-ci.org/gitlabhq/omniauth-ldap)
 
+### This fork
+Quick and dirty fork in order to support a dual authentication method : if the first
+authentication fails, tries on another one (with different base dn and uid)
+
 ### LDAP
 
 Use the LDAP strategy as a middleware in your application:
