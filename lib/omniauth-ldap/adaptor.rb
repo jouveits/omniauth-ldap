@@ -13,7 +13,7 @@ module OmniAuth
       class AuthenticationError < StandardError; end
       class ConnectionError < StandardError; end
 
-      VALID_ADAPTER_CONFIGURATION_KEYS = [:host, :port, :method, :bind_dn, :password, :try_sasl, :sasl_mechanisms, :uid, :base, :allow_anonymous, :filter]
+      VALID_ADAPTER_CONFIGURATION_KEYS = [:host, :port, :method, :bind_dn, :password, :try_sasl, :sasl_mechanisms, :uid, :base, :allow_anonymous, :filter, :second_uid, :second_base]
 
       # A list of needed keys. Possible alternatives are specified using sub-lists.
       MUST_HAVE_KEYS = [:host, :port, :method, [:uid, :filter], :base]
@@ -37,6 +37,7 @@ module OmniAuth
         end
         raise ArgumentError.new(message.join(",") +" MUST be provided") unless message.empty?
       end
+
       def initialize(configuration={})
         Adaptor.validate(configuration)
         @configuration = configuration.dup
@@ -54,7 +55,6 @@ module OmniAuth
         }
 
         @bind_method = @try_sasl ? :sasl : (@allow_anonymous||!@bind_dn||!@password ? :anonymous : :simple)
-
 
         @auth = sasl_auths({:username => @bind_dn, :password => @password}).first if @bind_method == :sasl
         @auth ||= { :method => @bind_method,
@@ -77,13 +77,41 @@ module OmniAuth
             method = args[:method] || @method
             password = password.call if password.respond_to?(:call)
             if method == 'sasl'
-            result = rs.first if me.bind(sasl_auths({:username => dn, :password => password}).first)
+							result = rs.first if me.bind(sasl_auths({:username => dn, :password => password}).first)
             else
-            result = rs.first if me.bind(:method => :simple, :username => dn,
+							result = rs.first if me.bind(:method => :simple, :username => dn,
                                 :password => password)
             end
           end
         end
+
+				if result == false
+					# in case first LDAP auth failed, trying with second configuration
+					ldap = Net::LDAP.new :host => @host,
+													     :port => 389,
+													     :auth => {
+											           :method => :anonymous,
+											           :username => "",
+											           :password => ""
+														     }
+
+					filter = Net::LDAP::Filter.eq(@second_uid, args[:username])
+					treebase = @second_base
+
+					rs = ldap.search( :base => treebase, :filter => filter )
+					if rs and rs.first and dn = rs.first.dn
+						password = args[:password]
+						method = args[:method] || @method
+						password = password.call if password.respond_to?(:call)
+						if method == 'sasl'
+							result = rs.first if ldap.bind(sasl_auths({:username => dn, :password => password}).first)
+						else
+							result = rs.first if ldap.bind(:method => :simple, :username => dn,
+																:password => password)
+						end
+					end
+				end
+
         result
       end
 
