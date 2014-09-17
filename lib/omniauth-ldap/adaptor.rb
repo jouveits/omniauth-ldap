@@ -95,7 +95,12 @@ module OmniAuth
 											           :password => ""
 														     }
 
-					filter = Net::LDAP::Filter.eq(@second_uid, args[:username])
+					if args[:username].empty?
+            filter = args[:filter]
+          else
+            filter = Net::LDAP::Filter.eq(@second_uid, args[:username])
+          end
+
 					treebase = @second_base
 
 					rs = ldap.search( :base => treebase, :filter => filter )
